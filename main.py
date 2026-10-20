@@ -1,69 +1,22 @@
 """
-Лабораторная работа: Решение заданий 1 и 2
-Тема: ООП в Python, валидация данных и бизнес-логика записи клиентов.
+Лабораторная работа: Backend Web
+1. ООП и бизнес-логика записи клиентов (Класс Appointment).
+2. Разработка REST API эндпоинтов (Категории услуг: GET /categories, GET /categories/{category_id}).
 """
 
+import sys
+import json
 from datetime import time as dtime
-from typing import Optional
+from typing import Optional, List
+from fastapi import FastAPI, HTTPException, status
+from fastapi.testclient import TestClient
+
+from models import Appointment, Appoinment, Master, Service, Category
+from app import app, CATEGORIES
 
 
 # ==========================================================
-# 1. Модели данных (Models)
-# ==========================================================
-
-class Master:
-    """Модель мастера салона."""
-
-    def __init__(self, master_id: int, name: str = ""):
-        self.master_id = master_id
-        self.name = name
-
-    def __repr__(self) -> str:
-        return f"Master(id={self.master_id}, name='{self.name}')"
-
-
-class Service:
-    """Модель услуги салона."""
-
-    def __init__(self, service_id: int, name: str = "", price: float = 0.0):
-        self.service_id = service_id
-        self.name = name
-        self.price = price
-
-    def __repr__(self) -> str:
-        return f"Service(id={self.service_id}, name='{self.name}', price={self.price})"
-
-
-class Appointment:
-    """Класс записи клиента на услугу (Задание 1)."""
-
-    def __init__(
-        self,
-        id: int,
-        client_name: str,
-        master_id: int,
-        service_id: int,
-        time: str,
-    ):
-        self.id = id
-        self.client_name = client_name
-        self.master_id = master_id
-        self.service_id = service_id
-        self.time = time
-
-    def __repr__(self) -> str:
-        return (
-            f"Appointment(id={self.id}, client_name='{self.client_name}', "
-            f"master_id={self.master_id}, service_id={self.service_id}, time='{self.time}')"
-        )
-
-
-# Поддержка названия из формулировки задания (Appoinment без буквы 't')
-Appoinment = Appointment
-
-
-# ==========================================================
-# 2. Имитация базы данных и вспомогательные функции
+# ЧАСТЬ 1: Запись клиентов (Appointment & Business Rules)
 # ==========================================================
 
 MASTERS = {
@@ -92,9 +45,7 @@ def get_service(service_id: int) -> Optional[Service]:
 
 
 def is_valid_working_time(time_str: str) -> bool:
-    """
-    Проверка часов работы салона: с 08:00 до 20:00 (Задание 2).
-    """
+    """Проверка часов работы салона: с 08:00 до 20:00."""
     if not time_str or not isinstance(time_str, str):
         return False
     try:
@@ -110,10 +61,6 @@ def is_valid_working_time(time_str: str) -> bool:
         return False
 
 
-# ==========================================================
-# 3. Основная функция создания записи
-# ==========================================================
-
 appointments: list[Appointment] = []
 
 
@@ -125,12 +72,10 @@ def create_appointment(
 ) -> Optional[Appointment]:
     """
     Создает объект записи клиента (класс Appointment).
-    
-    Условия создания записи:
-    1. Заполнены все поля (клиент, мастер, услуга, время).
-    2. Время находится в интервале рабочих часов салона: с 08:00 до 20:00.
+    Запись создается только при условии:
+    1. Все поля заполнены.
+    2. Время записи находится в диапазоне с 08:00 до 20:00.
     """
-    # Проверка заполненности всех полей
     if not client_name or not str(client_name).strip():
         return None
     if master_id is None or not isinstance(master_id, int):
@@ -140,7 +85,6 @@ def create_appointment(
     if not time or not str(time).strip():
         return None
 
-    # Проверка бизнес-правила часов работы (с 08:00 до 20:00)
     if not is_valid_working_time(time):
         return None
 
@@ -162,44 +106,74 @@ def create_appointment(
 
 
 # ==========================================================
-# 4. Проверочные сценарии из условий заданий
+# Демонстрация работы всех заданий
 # ==========================================================
 
-def run_tests():
+def run_demonstration():
     global appointments
 
-    print("--------------------------------------------------")
-    print("Задание 1 и 2: Создание корректных записей")
-    print("--------------------------------------------------")
-    appointments = []
+    print("==================================================")
+    print("1. ПРОВЕРКА ЗАДАНИЙ: ЗАПИСЬ КЛИЕНТОВ (APPOINTMENT)")
+    print("==================================================")
 
+    # 1.1 Создание корректных записей
+    appointments = []
     first_appointment = create_appointment("Иванова А.А.", 1, 1, "10:00")
     second_appointment = create_appointment("Петрова А.А.", 1, 1, "11:00")
 
-    print("Список записей:")
+    print("\nСписок записей:")
     for appointment in appointments:
         print(appointment.client_name, appointment.time)
 
-    print("\n--------------------------------------------------")
-    print("Задание 1: Создать запись, где частично не заполнены поля")
-    print("--------------------------------------------------")
+    # 1.2 Создание записи с неполными данными
     appointments = []
     no_correct_appointment = create_appointment("", 1, 1, "12:00")
+    print("\nПроверка незаполненных полей (client_name=''):")
+    print("appointments:", appointments)
+    print("len(appointments):", len(appointments))
 
-    print("Результат проверки appointments:")
-    print(appointments)
-    print("Длина appointments (len):", len(appointments))
-
-    print("\n--------------------------------------------------")
-    print("Задание 2: Создать запись с некорректным временем (00:00)")
-    print("--------------------------------------------------")
+    # 1.3 Создание записи с некорректным временем (00:00)
     appointments = []
     no_correct_appointment_time = create_appointment("Сидорова А.А.", 1, 1, "00:00")
+    print("\nПроверка некорректного времени ('00:00'):")
+    print("appointments:", appointments)
+    print("len(appointments):", len(appointments))
 
-    print("Результат проверки appointments:")
-    print(appointments)
-    print("Длина appointments (len):", len(appointments))
+    print("\n==================================================")
+    print("2. ПРОВЕРКА ЗАДАНИЙ: ЭНДПОИНТЫ КАТЕГОРИЙ (FASTAPI)")
+    print("==================================================")
+
+    client = TestClient(app)
+
+    # 2.1 GET /categories
+    print("\n[Эндпоинт 1] GET /categories:")
+    r1 = client.get("/categories")
+    print(f"Статус-код: {r1.status_code}")
+    print("Тело ответа:")
+    print(json.dumps(r1.json(), ensure_ascii=False, indent=2))
+
+    # 2.2 GET /categories/{category_id} - Успешно
+    print("\n[Эндпоинт 2] GET /categories/1 (Успешный запрос):")
+    r2 = client.get("/categories/1")
+    print(f"Статус-код: {r2.status_code}")
+    print("Тело ответа:")
+    print(json.dumps(r2.json(), ensure_ascii=False, indent=2))
+
+    # 2.3 GET /categories/{category_id} - 404
+    print("\n[Эндпоинт 2] GET /categories/999 (Категория не найдена):")
+    r3 = client.get("/categories/999")
+    print(f"Статус-код: {r3.status_code}")
+    print(f"Тело ответа: {r3.json()}")
+
+    print("\n==================================================")
+    print("Все тесты и эндпоинты успешно выполнены!")
+    print("==================================================")
 
 
 if __name__ == "__main__":
-    run_tests()
+    if "--serve" in sys.argv:
+        import uvicorn
+        print("Запуск FastAPI сервера на http://127.0.0.1:8000 ...")
+        uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    else:
+        run_demonstration()

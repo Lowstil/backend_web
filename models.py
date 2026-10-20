@@ -1,5 +1,10 @@
 from typing import Optional
+from pydantic import BaseModel, Field
 
+
+# ==========================================================
+# Модели из Задания 1 и 2 (Запись клиентов)
+# ==========================================================
 
 class Master:
     """Модель мастера салона."""
@@ -50,3 +55,24 @@ class Appointment:
 
 # Поддержка названия из формулировки задания (Appoinment без буквы 't')
 Appoinment = Appointment
+
+
+# ==========================================================
+# Модели для Эндпоинтов (Категории услуг)
+# ==========================================================
+
+class Category(BaseModel):
+    """Pydantic-модель категории услуг салона."""
+
+    id: int = Field(..., description="Уникальный идентификатор категории")
+    name: str = Field(..., description="Название категории услуг")
+    servicesCount: int = Field(..., description="Количество услуг в категории")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": 1,
+                "name": "Стрижки и укладки",
+                "servicesCount": 5,
+            }
+        }
