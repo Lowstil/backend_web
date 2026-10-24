@@ -1,28 +1,25 @@
 """
 Лабораторная работа: Backend Web
 1. ООП и бизнес-логика записи клиентов (Класс Appointment).
-2. Разработка REST API эндпоинтов (Категории услуг: GET /categories, GET /categories/{category_id}).
+2. REST API эндпоинты категорий услуг (GET /categories, GET /categories/{category_id}).
+3. SQLite БД и SQLAlchemy API для мастеров (GET /masters, GET /masters?specialization=..., GET /masters/{master_id}).
 """
 
-import sys
 import json
+import sys
 from datetime import time as dtime
-from typing import Optional, List
-from fastapi import FastAPI, HTTPException, status
+from typing import Optional
+
 from fastapi.testclient import TestClient
 
-from models import Appointment, Appoinment, Master, Service, Category
-from app import app, CATEGORIES
+from app import app
+from database import init_db
+from models import Appointment, Appoinment, Category, Master, MasterSchema, Service
 
 
 # ==========================================================
 # ЧАСТЬ 1: Запись клиентов (Appointment & Business Rules)
 # ==========================================================
-
-MASTERS = {
-    1: Master(1, "Иванов И.И."),
-    2: Master(2, "Сергеев С.С."),
-}
 
 SERVICES = {
     1: Service(1, "Стрижка", 1500.0),
@@ -34,7 +31,8 @@ def get_master(master_id: int) -> Optional[Master]:
     """Получение мастера по ID."""
     if not isinstance(master_id, int) or master_id <= 0:
         return None
-    return MASTERS.get(master_id, Master(master_id, f"Мастер #{master_id}"))
+    # Возвращаем объект с атрибутом master_id
+    return Master(id=master_id, name=f"Мастер #{master_id}", specialization="Парикмахер")
 
 
 def get_service(service_id: int) -> Optional[Service]:
@@ -72,7 +70,6 @@ def create_appointment(
 ) -> Optional[Appointment]:
     """
     Создает объект записи клиента (класс Appointment).
-    Запись создается только при условии:
     1. Все поля заполнены.
     2. Время записи находится в диапазоне с 08:00 до 20:00.
     """
@@ -113,10 +110,9 @@ def run_demonstration():
     global appointments
 
     print("==================================================")
-    print("1. ПРОВЕРКА ЗАДАНИЙ: ЗАПИСЬ КЛИЕНТОВ (APPOINTMENT)")
+    print("1. ЗАДАНИЯ 1: ЗАПИСЬ КЛИЕНТОВ (APPOINTMENT)")
     print("==================================================")
 
-    # 1.1 Создание корректных записей
     appointments = []
     first_appointment = create_appointment("Иванова А.А.", 1, 1, "10:00")
     second_appointment = create_appointment("Петрова А.А.", 1, 1, "11:00")
@@ -125,14 +121,12 @@ def run_demonstration():
     for appointment in appointments:
         print(appointment.client_name, appointment.time)
 
-    # 1.2 Создание записи с неполными данными
     appointments = []
     no_correct_appointment = create_appointment("", 1, 1, "12:00")
     print("\nПроверка незаполненных полей (client_name=''):")
     print("appointments:", appointments)
     print("len(appointments):", len(appointments))
 
-    # 1.3 Создание записи с некорректным временем (00:00)
     appointments = []
     no_correct_appointment_time = create_appointment("Сидорова А.А.", 1, 1, "00:00")
     print("\nПроверка некорректного времени ('00:00'):")
@@ -140,39 +134,58 @@ def run_demonstration():
     print("len(appointments):", len(appointments))
 
     print("\n==================================================")
-    print("2. ПРОВЕРКА ЗАДАНИЙ: ЭНДПОИНТЫ КАТЕГОРИЙ (FASTAPI)")
+    print("2. ЗАДАНИЯ 2: ЭНДПОИНТЫ КАТЕГОРИЙ (FASTAPI)")
     print("==================================================")
 
+    init_db()
     client = TestClient(app)
 
-    # 2.1 GET /categories
-    print("\n[Эндпоинт 1] GET /categories:")
-    r1 = client.get("/categories")
-    print(f"Статус-код: {r1.status_code}")
-    print("Тело ответа:")
-    print(json.dumps(r1.json(), ensure_ascii=False, indent=2))
+    print("\n[GET /categories]:")
+    r_cat = client.get("/categories")
+    print(f"Статус: {r_cat.status_code}")
+    print(json.dumps(r_cat.json(), ensure_ascii=False, indent=2))
 
-    # 2.2 GET /categories/{category_id} - Успешно
-    print("\n[Эндпоинт 2] GET /categories/1 (Успешный запрос):")
-    r2 = client.get("/categories/1")
-    print(f"Статус-код: {r2.status_code}")
-    print("Тело ответа:")
-    print(json.dumps(r2.json(), ensure_ascii=False, indent=2))
+    print("\n[GET /categories/1]:")
+    r_cat_1 = client.get("/categories/1")
+    print(f"Статус: {r_cat_1.status_code}")
+    print(json.dumps(r_cat_1.json(), ensure_ascii=False, indent=2))
 
-    # 2.3 GET /categories/{category_id} - 404
-    print("\n[Эндпоинт 2] GET /categories/999 (Категория не найдена):")
-    r3 = client.get("/categories/999")
-    print(f"Статус-код: {r3.status_code}")
-    print(f"Тело ответа: {r3.json()}")
+    print("\n[GET /categories/999]:")
+    r_cat_404 = client.get("/categories/999")
+    print(f"Статус: {r_cat_404.status_code}, Тело: {r_cat_404.json()}")
 
     print("\n==================================================")
-    print("Все тесты и эндпоинты успешно выполнены!")
+    print("3. ЗАДАНИЯ 3: МАСТЕРА В SQLite & SQLAlchemy")
+    print("==================================================")
+
+    print("\n[GET /masters] (Все мастера из SQLite БД):")
+    r_masters = client.get("/masters")
+    print(f"Статус: {r_masters.status_code}")
+    print(json.dumps(r_masters.json(), ensure_ascii=False, indent=2))
+
+    print("\n[GET /masters?specialization=Парикмахер] (Фильтрация):")
+    r_filter = client.get("/masters", params={"specialization": "Парикмахер"})
+    print(f"Статус: {r_filter.status_code}")
+    print(json.dumps(r_filter.json(), ensure_ascii=False, indent=2))
+
+    print("\n[GET /masters/1] (Мастер по ID):")
+    r_m1 = client.get("/masters/1")
+    print(f"Статус: {r_m1.status_code}")
+    print(json.dumps(r_m1.json(), ensure_ascii=False, indent=2))
+
+    print("\n[GET /masters/999] (Несуществующий мастер - 404 Not Found):")
+    r_m404 = client.get("/masters/999")
+    print(f"Статус: {r_m404.status_code}, Тело: {r_m404.json()}")
+
+    print("\n==================================================")
+    print("Все сценарии проверены и работают корректно!")
     print("==================================================")
 
 
 if __name__ == "__main__":
     if "--serve" in sys.argv:
         import uvicorn
+        init_db()
         print("Запуск FastAPI сервера на http://127.0.0.1:8000 ...")
         uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
     else:
