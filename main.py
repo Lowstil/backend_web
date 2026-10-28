@@ -1,8 +1,9 @@
 """
-Лабораторная работа: Backend Web
+Лабораторная работа: Backend Web (Beauty Salon API)
 1. ООП и бизнес-логика записи клиентов (Класс Appointment).
 2. REST API эндпоинты категорий услуг (GET /categories, GET /categories/{category_id}).
 3. SQLite БД и SQLAlchemy API для мастеров (GET /masters, GET /masters?specialization=..., GET /masters/{master_id}).
+4. Pydantic-валидация и API добавления услуг в БД (POST /services).
 """
 
 import json
@@ -13,17 +14,26 @@ from typing import Optional
 from fastapi.testclient import TestClient
 
 from app import app
-from database import init_db
-from models import Appointment, Appoinment, Category, Master, MasterSchema, Service
+from database import SessionLocal, init_db
+from models import (
+    Appointment,
+    Appoinment,
+    Category,
+    Master,
+    MasterSchema,
+    Service,
+    ServiceCreate,
+    ServiceResponse,
+)
 
 
 # ==========================================================
 # ЧАСТЬ 1: Запись клиентов (Appointment & Business Rules)
 # ==========================================================
 
-SERVICES = {
-    1: Service(1, "Стрижка", 1500.0),
-    2: Service(2, "Укладка", 2000.0),
+DEFAULT_SERVICES = {
+    1: {"name": "Стрижка", "price": 1500.0},
+    2: {"name": "Укладка", "price": 2000.0},
 }
 
 
@@ -31,7 +41,6 @@ def get_master(master_id: int) -> Optional[Master]:
     """Получение мастера по ID."""
     if not isinstance(master_id, int) or master_id <= 0:
         return None
-    # Возвращаем объект с атрибутом master_id
     return Master(id=master_id, name=f"Мастер #{master_id}", specialization="Парикмахер")
 
 
@@ -39,7 +48,15 @@ def get_service(service_id: int) -> Optional[Service]:
     """Получение услуги по ID."""
     if not isinstance(service_id, int) or service_id <= 0:
         return None
-    return SERVICES.get(service_id, Service(service_id, f"Услуга #{service_id}"))
+    data = DEFAULT_SERVICES.get(service_id, {"name": f"Услуга #{service_id}", "price": 1000.0})
+    return Service(
+        id=service_id,
+        category_id=1,
+        title=data["name"],
+        desc="Описание услуги",
+        duration=30,
+        price=data["price"],
+    )
 
 
 def is_valid_working_time(time_str: str) -> bool:
@@ -68,11 +85,7 @@ def create_appointment(
     service_id: int,
     time: str,
 ) -> Optional[Appointment]:
-    """
-    Создает объект записи клиента (класс Appointment).
-    1. Все поля заполнены.
-    2. Время записи находится в диапазоне с 08:00 до 20:00.
-    """
+    """Создает объект записи клиента (класс Appointment)."""
     if not client_name or not str(client_name).strip():
         return None
     if master_id is None or not isinstance(master_id, int):
@@ -173,9 +186,47 @@ def run_demonstration():
     print(f"Статус: {r_m1.status_code}")
     print(json.dumps(r_m1.json(), ensure_ascii=False, indent=2))
 
-    print("\n[GET /masters/999] (Несуществующий мастер - 404 Not Found):")
+    print("\n[GET /masters/999] (Несуществующий мастер - 404):")
     r_m404 = client.get("/masters/999")
     print(f"Статус: {r_m404.status_code}, Тело: {r_m404.json()}")
+
+    print("\n==================================================")
+    print("4. ЗАДАНИЯ 4: PYDANTIC ServiceCreate И POST /services")
+    print("==================================================")
+
+    print("\n[POST /services] (Корректные данные -> 201 Created):")
+    payload_valid = {
+        "categoryId": 3,
+        "title": "Наращивание ресниц",
+        "desc": "Огромные ресницы уже через 30 минут",
+        "duration": 30,
+        "price": 1500.00,
+    }
+    r_s1 = client.post("/services", json=payload_valid)
+    print(f"Статус: {r_s1.status_code}")
+    print(json.dumps(r_s1.json(), ensure_ascii=False, indent=2))
+
+    print("\n[POST /services] (Некорректная цена 'бесплатно' -> 422):")
+    payload_invalid_price = {
+        "categoryId": 3,
+        "title": "Наращивание ресниц",
+        "desc": "Огромные ресницы уже через 30 минут",
+        "duration": 30,
+        "price": "бесплатно",
+    }
+    r_s2 = client.post("/services", json=payload_invalid_price)
+    print(f"Статус: {r_s2.status_code} (Ошибка валидации 422)")
+
+    print("\n[POST /services] (Пустой desc, duration=0, price=-1500.00 -> 422):")
+    payload_invalid_all = {
+        "categoryId": 3,
+        "title": "Наращивание ресниц",
+        "desc": "",
+        "duration": 0,
+        "price": -1500.00,
+    }
+    r_s3 = client.post("/services", json=payload_invalid_all)
+    print(f"Статус: {r_s3.status_code} (Ошибка валидации 422)")
 
     print("\n==================================================")
     print("Все сценарии проверены и работают корректно!")

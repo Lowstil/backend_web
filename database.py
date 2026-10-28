@@ -7,7 +7,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./salon.db"
 
-# Движок для SQLite базы данных (connect_args={'check_same_thread': False} для FastAPI)
+# Движок для SQLite базы данных
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
@@ -30,13 +30,13 @@ def get_db():
 
 
 def init_db():
-    """Инициализация базы данных и наполнение таблицы masters тестовыми данными."""
-    from models import Master
+    """Инициализация базы данных и наполнение тестовыми данными."""
+    from models import Master, Service
 
     Base.metadata.create_all(bind=engine)
 
     with SessionLocal() as db:
-        # Проверяем, есть ли уже записи в таблице masters
+        # Проверяем и заполняем мастеров, если таблица пуста
         if db.query(Master).count() == 0:
             initial_masters = [
                 Master(id=1, name="Анна", specialization="Парикмахер"),

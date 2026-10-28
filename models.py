@@ -1,17 +1,17 @@
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, Integer, String
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import Column, Float, Integer, String
 
 from database import Base
 
 
 # ==========================================================
-# 1. SQLAlchemy Модели (Таблицы БД)
+# 1. SQLAlchemy Модели (Таблицы в SQLite БД)
 # ==========================================================
 
 class Master(Base):
     """
-    SQLAlchemy-модель мастера салона (Задание 1).
+    SQLAlchemy-модель мастера салона.
     Таблица: masters
     Поля: id, name, specialization
     """
@@ -31,9 +31,114 @@ class Master(Base):
         return f"<Master(id={self.id}, name='{self.name}', specialization='{self.specialization}')>"
 
 
+class Service(Base):
+    """
+    SQLAlchemy-модель услуги салона.
+    Таблица: services
+    Поля: id, category_id, title, desc, duration, price
+    """
+
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    category_id = Column(Integer, nullable=False, index=True)
+    title = Column(String(100), nullable=False)
+    desc = Column(String(100), nullable=False)
+    duration = Column(Integer, nullable=False)
+    price = Column(Float, nullable=False)
+
+    @property
+    def categoryId(self) -> int:
+        return self.category_id
+
+    @property
+    def service_id(self) -> int:
+        return self.id
+
+    @property
+    def name(self) -> str:
+        return self.title
+
+    def __repr__(self) -> str:
+        return (
+            f"<Service(id={self.id}, category_id={self.category_id}, "
+            f"title='{self.title}', duration={self.duration}, price={self.price})>"
+        )
+
+
 # ==========================================================
-# 2. Pydantic-схемы (Для валидации и сериализации в API)
+# 2. Pydantic-схемы для валидации и сериализации в API
 # ==========================================================
+
+class ServiceCreate(BaseModel):
+    """
+    Pydantic-модель для создания новой услуги (Задание 1).
+    Поля:
+    - categoryId: идентификатор категории
+    - title: название услуги (не пустое, макс 100 символов)
+    - desc: описание услуги (не пустое, макс 100 символов)
+    - duration: продолжительность (от 30 мин до 180 мин / 3 часов)
+    - price: стоимость (больше 0)
+    """
+
+    categoryId: int = Field(..., description="Идентификатор категории")
+    title: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Название услуги (не может быть пустым, макс 100 символов)",
+    )
+    desc: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Описание услуги (не может быть пустым, макс 100 символов)",
+    )
+    duration: int = Field(
+        ...,
+        ge=30,
+        le=180,
+        description="Продолжительность услуги в минутах (от 30 до 180 минут)",
+    )
+    price: float = Field(
+        ...,
+        gt=0,
+        description="Стоимость услуги (должна быть строго больше 0)",
+    )
+
+    @field_validator("title", "desc")
+    @classmethod
+    def check_not_empty_whitespace(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Поле не может быть пустым или состоять только из пробелов")
+        return v.strip()
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "categoryId": 3,
+                "title": "Наращивание ресниц",
+                "desc": "Огромные ресницы уже через 30 минут",
+                "duration": 30,
+                "price": 1500.00,
+            }
+        },
+    )
+
+
+class ServiceResponse(BaseModel):
+    """Pydantic-схема ответа с данными об услуге."""
+
+    id: int
+    categoryId: int
+    title: str
+    desc: str
+    duration: int
+    price: float
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
 
 class MasterSchema(BaseModel):
     """Pydantic-схема для отображения мастера в API."""
@@ -65,20 +170,8 @@ class Category(BaseModel):
 
 
 # ==========================================================
-# 3. Модели услуг и записей (Appointment / Service)
+# 3. Модели для логики записей клиентов (Appointment)
 # ==========================================================
-
-class Service:
-    """Модель услуги салона."""
-
-    def __init__(self, service_id: int, name: str = "", price: float = 0.0):
-        self.service_id = service_id
-        self.name = name
-        self.price = price
-
-    def __repr__(self) -> str:
-        return f"Service(id={self.service_id}, name='{self.name}', price={self.price})"
-
 
 class Appointment:
     """Класс записи клиента на услугу."""

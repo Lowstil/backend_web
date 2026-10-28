@@ -1,5 +1,5 @@
 """
-FastAPI приложение: реализация эндпоинтов категорий и мастеров салона красоты.
+FastAPI приложение: реализация эндпоинтов категорий, мастеров и услуг салона красоты.
 """
 
 from typing import List, Optional
@@ -7,12 +7,19 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db, init_db
-from models import Category, Master, MasterSchema
+from models import (
+    Category,
+    Master,
+    MasterSchema,
+    Service,
+    ServiceCreate,
+    ServiceResponse,
+)
 
 app = FastAPI(
     title="Beauty Salon API",
-    description="REST API для салона красоты: управление категориями услуг и мастерами (SQLAlchemy + SQLite)",
-    version="3.0.0",
+    description="REST API для салона красоты: управление категориями, услугами и мастерами (FastAPI + SQLAlchemy + SQLite)",
+    version="4.0.0",
 )
 
 
@@ -23,7 +30,84 @@ def on_startup():
 
 
 # ==========================================================
-# Эндпоинты мастеров (Задания: Модель Master и SQLite API)
+# 1. Эндпоинты услуг (Services - Задание: Pydantic ServiceCreate)
+# ==========================================================
+
+@app.post(
+    "/services",
+    response_model=ServiceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать новую услугу",
+    description="Добавляет новую услугу в базу данных SQLite с валидацией через ServiceCreate (код 201).",
+    responses={
+        201: {
+            "description": "Услуга успешно создана",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "categoryId": 3,
+                        "title": "Наращивание ресниц",
+                        "desc": "Огромные ресницы уже через 30 минут",
+                        "duration": 30,
+                        "price": 1500.0,
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Ошибка валидации входных данных",
+        },
+    },
+    tags=["Услуги"],
+)
+def create_service(service_in: ServiceCreate, db: Session = Depends(get_db)):
+    """
+    Задание 2: POST /services с использованием Pydantic-модели ServiceCreate.
+    """
+    db_service = Service(
+        category_id=service_in.categoryId,
+        title=service_in.title,
+        desc=service_in.desc,
+        duration=service_in.duration,
+        price=service_in.price,
+    )
+    db.add(db_service)
+    db.commit()
+    db.refresh(db_service)
+    return db_service
+
+
+@app.get(
+    "/services",
+    response_model=List[ServiceResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Получить список всех услуг",
+    tags=["Услуги"],
+)
+def get_services(db: Session = Depends(get_db)):
+    return db.query(Service).all()
+
+
+@app.get(
+    "/services/{service_id}",
+    response_model=ServiceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Получить услугу по ID",
+    tags=["Услуги"],
+)
+def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
+    service = db.query(Service).filter(Service.id == service_id).first()
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Service not found",
+        )
+    return service
+
+
+# ==========================================================
+# 2. Эндпоинты мастеров (Masters - SQLAlchemy + SQLite)
 # ==========================================================
 
 @app.get(
@@ -41,11 +125,6 @@ def get_masters(
     ),
     db: Session = Depends(get_db),
 ):
-    """
-    Задание 2:
-    1. GET /masters — получить список всех мастеров из таблицы базы данных.
-    2. GET /masters?specialization=Парикмахер — получить только мастеров указанной специализации.
-    """
     query = db.query(Master)
     if specialization:
         query = query.filter(Master.specialization == specialization)
@@ -59,34 +138,12 @@ def get_masters(
     summary="Информация о мастере",
     description="Возвращает информацию об одном мастере по его ID. Если мастер не найден — возвращает 404 Not Found.",
     responses={
-        200: {
-            "description": "Мастер успешно найден",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 1,
-                        "name": "Анна",
-                        "specialization": "Парикмахер",
-                    }
-                }
-            },
-        },
-        404: {
-            "description": "Мастер не найден",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Master not found"}
-                }
-            },
-        },
+        200: {"description": "Мастер успешно найден"},
+        404: {"description": "Мастер не найден"},
     },
     tags=["Мастера"],
 )
 def get_master_by_id(master_id: int, db: Session = Depends(get_db)):
-    """
-    Задание 2:
-    3. GET /masters/{master_id} — получить одного мастера по его id из таблицы БД.
-    """
     master = db.query(Master).filter(Master.id == master_id).first()
     if master is None:
         raise HTTPException(
@@ -97,7 +154,7 @@ def get_master_by_id(master_id: int, db: Session = Depends(get_db)):
 
 
 # ==========================================================
-# Эндпоинты категорий услуг (Из предыдущего задания)
+# 3. Эндпоинты категорий услуг (Categories)
 # ==========================================================
 
 CATEGORIES: list[dict] = [
@@ -113,7 +170,6 @@ CATEGORIES: list[dict] = [
     response_model=List[Category],
     status_code=status.HTTP_200_OK,
     summary="Список категорий",
-    description="Возвращает список всех категорий услуг с количеством услуг (servicesCount) в каждой.",
     tags=["Категории"],
 )
 def get_categories():
@@ -125,7 +181,6 @@ def get_categories():
     response_model=Category,
     status_code=status.HTTP_200_OK,
     summary="Информация по категории",
-    description="Возвращает информацию о конкретной категории услуг по её ID.",
     responses={
         200: {"description": "Категория найдена"},
         404: {"description": "Категория не найдена"},
@@ -148,6 +203,9 @@ def root():
         "message": "Beauty Salon API is running",
         "documentation": "/docs",
         "endpoints": [
+            "POST /services",
+            "GET /services",
+            "GET /services/{service_id}",
             "GET /masters",
             "GET /masters?specialization={specialization}",
             "GET /masters/{master_id}",

@@ -4,6 +4,7 @@
 1. **Объектно-ориентированная модель и бизнес-логика записи клиентов** (Задания: Класс `Appointment` и валидация времени).
 2. **REST API эндпоинты категорий услуг на FastAPI** (Задания: Список категорий и Информация по категории).
 3. **Хранение данных в SQLite и реализация API для мастеров через SQLAlchemy** (Задания: Модель `Master` и эндпоинты `/masters`).
+4. **Pydantic-модели валидации услуг и API добавления в БД** (Задания: Pydantic-модель `ServiceCreate` и `POST /services`).
 
 ---
 
@@ -31,38 +32,29 @@
 ### Часть 3. Модель Master и SQLite API через SQLAlchemy
 
 * **Задание 1. Модель `Master`**
-  * Создана SQLAlchemy-модель `Master` и таблица `masters` в SQLite (`salon.db`).
-  * Поля:
-    * `id` — целочисленный первичный ключ (Primary Key, autoincrement).
-    * `name` — имя мастера (строка).
-    * `specialization` — специализация (строка).
-  * Таблица предзаполнена данными:
-    * `(1, "Анна", "Парикмахер")`
-    * `(2, "Мария", "Визажист")`
-
+  * SQLAlchemy-модель `Master` и таблица `masters` в SQLite (`salon.db`).
+  * Поля: `id`, `name`, `specialization`.
 * **Задание 2. API-методы для мастеров**
-  1. `GET /masters` — получить список всех мастеров из таблицы SQLite БД.
-     ```json
-     [
-       { "id": 1, "name": "Анна", "specialization": "Парикмахер" },
-       { "id": 2, "name": "Мария", "specialization": "Визажист" }
-     ]
-     ```
-  2. `GET /masters?specialization=Парикмахер` — фильтрация мастеров по специализации.
-     ```json
-     [
-       { "id": 1, "name": "Анна", "specialization": "Парикмахер" }
-     ]
-     ```
-  3. `GET /masters/{master_id}` — получение мастера по ID.
-     * При `GET /masters/1` — **200 OK**:
-       ```json
-       { "id": 1, "name": "Анна", "specialization": "Парикмахер" }
-       ```
-     * Если мастер не найден (например, `GET /masters/999`) — **404 Not Found**:
-       ```json
-       { "detail": "Master not found" }
-       ```
+  * `GET /masters` — список всех мастеров.
+  * `GET /masters?specialization=Парикмахер` — фильтрация по специализации.
+  * `GET /masters/{master_id}` — получение мастера по ID (или 404).
+
+---
+
+### Часть 4. Pydantic-модель ServiceCreate и API добавления услуг
+
+* **Задание 1. Pydantic-модель `ServiceCreate`**
+  * Поля:
+    * `categoryId` (int) — идентификатор категории.
+    * `title` (str) — название услуги (не пустое, макс 100 символов).
+    * `desc` (str) — описание услуги (не пустое, макс 100 символов).
+    * `duration` (int) — продолжительность услуги (от 30 минут до 180 минут / 3 часов).
+    * `price` (float) — стоимость услуги (строго больше 0).
+
+* **Задание 2. Эндпоинт `POST /services`**
+  * Добавление новой услуги в таблицу `services` базы данных SQLite с валидацией через `ServiceCreate`.
+  * При корректных данных возвращает код **201 Created** и созданную запись.
+  * При некорректных данных (например, цена строкой `"бесплатно"` или отрицательная, пустое описание, длительность `0`) автоматически возвращает ошибку валидации с кодом **422 Unprocessable Entity**.
 
 ---
 
@@ -73,36 +65,38 @@ backend_web/
 ├── app.py                     # FastAPI веб-приложение со всеми эндпоинтами
 ├── database.py                # Подключение к SQLite, сессии SQLAlchemy, функция init_db
 ├── main.py                    # Главный файл запуска и сводной демонстрации всех заданий
-├── models.py                  # SQLAlchemy и Pydantic модели (Master, Category, Appointment)
-├── salon.db                   # SQLite база данных (создается автоматически)
+├── models.py                  # SQLAlchemy и Pydantic модели (Master, Service, ServiceCreate, Category)
 ├── task_1.py                  # Изолированное Задание 1 (Класс Appointment)
 ├── task_2.py                  # Изолированное Задание 2 (Часы работы)
-├── task_categories_1.py       # Изолированное Задание 1 (GET /categories)
-├── task_categories_2.py       # Изолированное Задание 2 (GET /categories/{category_id})
-├── task_masters_1.py          # Изолированное Задание 1 (Модель Master и таблица SQLite)
-├── task_masters_2.py          # Изолированное Задание 2 (API эндпоинты /masters)
+├── task_categories_1.py       # Изолированное Задание (GET /categories)
+├── task_categories_2.py       # Изолированное Задание (GET /categories/{category_id})
+├── task_masters_1.py          # Изолированное Задание (Модель Master в SQLite)
+├── task_masters_2.py          # Изолированное Задание (API эндпоинты /masters)
+├── task_services_1.py         # Изолированное Задание (Pydantic-модель ServiceCreate)
+├── task_services_2.py         # Изолированное Задание (POST /services и проверка БД)
 ├── tests/
 │   ├── test_appointments.py   # Тесты записей клиентов
 │   ├── test_categories.py     # Тесты эндпоинтов категорий
-│   └── test_masters.py        # Тесты SQLAlchemy модели и API мастеров
+│   ├── test_masters.py        # Тесты API мастеров
+│   └── test_services.py       # Тесты валидации ServiceCreate и POST /services
 ├── .gitignore                 # Исключение временных файлов
-└── README.md                  # Описание проекта и результатов
+└── README.md                  # Документация проекта
 ```
 
 ---
 
 ## 🚀 Запуск и проверка
 
-### 1. Запуск демонстрации всех заданий:
+### 1. Запуск сводной демонстрации всех заданий:
 ```bash
 python main.py
 ```
 
-### 2. Запуск автотестов (unittest):
+### 2. Запуск автоматических тестов (unittest):
 ```bash
 python -m unittest discover tests
 ```
-Все 18 тестов проходят успешно (`Ran 18 tests ... OK`).
+Все **29 тестов** проходят успешно (`Ran 29 tests ... OK`).
 
 ### 3. Запуск веб-сервера с интерактивной документацией Swagger:
 ```bash
