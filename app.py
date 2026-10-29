@@ -29,9 +29,7 @@ def on_startup():
     init_db()
 
 
-# ==========================================================
 # 1. Эндпоинты услуг (Services - Задание: Pydantic ServiceCreate)
-# ==========================================================
 
 @app.post(
     "/services",
@@ -106,9 +104,8 @@ def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
     return service
 
 
-# ==========================================================
+
 # 2. Эндпоинты мастеров (Masters - SQLAlchemy + SQLite)
-# ==========================================================
 
 @app.get(
     "/masters",
@@ -153,9 +150,7 @@ def get_master_by_id(master_id: int, db: Session = Depends(get_db)):
     return master
 
 
-# ==========================================================
 # 3. Эндпоинты категорий услуг (Categories)
-# ==========================================================
 
 CATEGORIES: list[dict] = [
     {"id": 1, "name": "Стрижки и укладки", "servicesCount": 5},
